@@ -17,15 +17,15 @@
     <header class="app-header">
       <div>
         <div class="eyebrow">MES SOLDES</div>
-        <h1 id="pageTitle">Accueil</h1>
+        <h1 id="pageTitle">Accueil</h1><div class="profile-label" id="profileLabel">Moi</div>
       </div>
       <button class="icon-btn" id="quickAddBtn" aria-label="Ajouter">＋</button>
     </header>
 
     <div class="person-switch" aria-label="Choisir une personne">
-      <button class="person-btn active" data-person="me">Moi</button>
-      <button class="person-btn" data-person="wife">Ma femme</button>
-      <button class="person-btn" data-person="all">Ensemble</button>
+      <button type="button" class="person-btn active" data-person="me" id="personMeBtn">Moi</button>
+      <button type="button" class="person-btn" data-person="wife" id="personWifeBtn">Ma femme</button>
+      <button type="button" class="person-btn" data-person="all" id="personAllBtn">Ensemble</button>
     </div>
 
     <main class="content">
