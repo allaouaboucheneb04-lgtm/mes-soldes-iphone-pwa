@@ -340,8 +340,13 @@
     </section>
 
     <section class="panel">
-      <h2>Mes comptes</h2>
-      <div class="account-list" id="accountList"></div>
+      <h2>Comptes bancaires & espèces</h2>
+      <div class="account-list" id="bankAccountList"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Cartes de crédit</h2>
+      <div class="account-list" id="creditAccountList"></div>
     </section>
 
     <section class="panel">
@@ -371,7 +376,8 @@
     const balanceInput = document.getElementById('balance');
     const limitInput = document.getElementById('limit');
     const limitField = document.getElementById('limitField');
-    const accountList = document.getElementById('accountList');
+    const bankAccountList = document.getElementById('bankAccountList');
+    const creditAccountList = document.getElementById('creditAccountList');
     const cancelBtn = document.getElementById('cancelBtn');
     const formTitle = document.getElementById('formTitle');
     const saveBtn = document.getElementById('saveBtn');
@@ -409,6 +415,28 @@
       renderReports();
     }
 
+    function accountCard(a) {
+      const typeLabel = a.type === 'bank' ? 'Compte bancaire' : a.type === 'credit' ? 'Carte de crédit' : 'Espèces';
+      let extra = '';
+      if (a.type === 'credit' && Number(a.limit) > 0) {
+        const available = Math.max(0, Number(a.limit) - Number(a.balance));
+        extra = ` · Limite : ${money(a.limit)} · Disponible : ${money(available)}`;
+      }
+      return `
+        <div class="account">
+          <div class="account-main">
+            <div class="account-name">${escapeHtml(a.name)}</div>
+            <div class="account-meta">${typeLabel}${extra}</div>
+          </div>
+          <div class="account-balance ${a.type === 'credit' ? 'negative' : 'positive'}">${money(a.balance)}</div>
+          <div class="account-buttons">
+            <button class="btn-secondary" onclick="editAccount('${a.id}')">Modifier</button>
+            <button class="btn-danger" onclick="deleteAccount('${a.id}')">Supprimer</button>
+          </div>
+        </div>
+      `;
+    }
+
     function render() {
       const t = totals(accounts);
       document.getElementById('bankTotal').textContent = money(t.bank);
@@ -417,31 +445,17 @@
       netEl.textContent = money(t.net);
       netEl.className = 'value ' + (t.net >= 0 ? 'positive' : 'negative');
 
-      if (!accounts.length) {
-        accountList.innerHTML = '<div class="empty">Aucun compte enregistré pour le moment.</div>';
-      } else {
-        accountList.innerHTML = accounts.map(a => {
-          const typeLabel = a.type === 'bank' ? 'Compte bancaire' : a.type === 'credit' ? 'Carte de crédit' : 'Espèces';
-          let extra = '';
-          if (a.type === 'credit' && Number(a.limit) > 0) {
-            const available = Math.max(0, Number(a.limit) - Number(a.balance));
-            extra = ` · Disponible : ${money(available)}`;
-          }
-          return `
-            <div class="account">
-              <div class="account-main">
-                <div class="account-name">${escapeHtml(a.name)}</div>
-                <div class="account-meta">${typeLabel}${extra}</div>
-              </div>
-              <div class="account-balance ${a.type === 'credit' ? 'negative' : 'positive'}">${money(a.balance)}</div>
-              <div class="account-buttons">
-                <button class="btn-secondary" onclick="editAccount('${a.id}')">Modifier</button>
-                <button class="btn-danger" onclick="deleteAccount('${a.id}')">Supprimer</button>
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
+      const bankAccounts = accounts.filter(a => a.type === 'bank' || a.type === 'cash');
+      const creditAccounts = accounts.filter(a => a.type === 'credit');
+
+      bankAccountList.innerHTML = bankAccounts.length
+        ? bankAccounts.map(accountCard).join('')
+        : '<div class="empty">Aucun compte bancaire ou espèces enregistré.</div>';
+
+      creditAccountList.innerHTML = creditAccounts.length
+        ? creditAccounts.map(accountCard).join('')
+        : '<div class="empty">Aucune carte de crédit enregistrée.</div>';
+
       renderReports();
     }
 
