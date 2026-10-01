@@ -1,6 +1,7 @@
 (() => {
   const ACCOUNTS_KEY = 'mes-soldes-v1';
   const REPORTS_KEY = 'mes-soldes-reports-v1';
+  const REVENUES_KEY = 'mes-soldes-revenues-v1';
   const LAST_BACKUP_KEY = 'mes-soldes-last-backup-v1';
   const PERSON_KEY = 'mes-soldes-person-v1';
 
@@ -8,6 +9,9 @@
     owner: a.owner === 'wife' ? 'wife' : 'me'
   }));
   let reports = load(REPORTS_KEY, []);
+  let revenues = load(REVENUES_KEY, []).map((r) => Object.assign({}, r, {
+    owner: r.owner === 'wife' ? 'wife' : 'me'
+  }));
   let currentView = 'home';
   let currentPerson = localStorage.getItem(PERSON_KEY) || 'me';
   if (!['me', 'wife', 'all'].includes(currentPerson)) currentPerson = 'me';
@@ -27,6 +31,7 @@
   function persist() {
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
     localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+    localStorage.setItem(REVENUES_KEY, JSON.stringify(revenues));
     renderAll();
   }
 
@@ -101,7 +106,7 @@
     currentView = view;
     qsa('.view').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
     qsa('.nav-btn').forEach((el) => el.classList.toggle('active', el.dataset.viewTarget === view));
-    const titles = { home: 'Accueil', accounts: 'Comptes', cards: 'Cartes', reports: 'Rapports', backup: 'Sauvegarde' };
+    const titles = { home: 'Accueil', accounts: 'Comptes', cards: 'Cartes', revenues: 'Revenus', reports: 'Rapports', backup: 'Sauvegarde' };
     $('pageTitle').textContent = titles[view] || 'Mes Soldes';
     $('quickAddBtn').style.display = ['home', 'accounts', 'cards'].includes(view) ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -114,6 +119,7 @@
     qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === person));
     const labels = { me: 'Moi', wife: 'Ma femme', all: 'Ensemble' };
     if ($('profileLabel')) $('profileLabel').textContent = labels[person];
+    if ($('revenueOwner') && person !== 'all') $('revenueOwner').value = person;
     renderAll();
   }
 
@@ -316,6 +322,53 @@
       : '<div class="section-card"><div class="empty">Aucun compte rendu mensuel enregistré.</div></div>';
   }
 
+
+  function revenuesForMonth(month) {
+    return revenues.filter((r) => String(r.date || '').slice(0, 7) === month);
+  }
+
+  function revenueTotals(month) {
+    const monthItems = revenuesForMonth(month);
+    const me = monthItems.filter((r) => r.owner !== 'wife').reduce((s, r) => s + Number(r.amount || 0), 0);
+    const wife = monthItems.filter((r) => r.owner === 'wife').reduce((s, r) => s + Number(r.amount || 0), 0);
+    return { me: me, wife: wife, all: me + wife };
+  }
+
+  function revenueRow(item) {
+    const badge = currentPerson === 'all'
+      ? '<span class="revenue-owner">' + ownerLabel(item.owner) + '</span>'
+      : '';
+    const dateText = item.date
+      ? new Date(item.date + 'T12:00:00').toLocaleDateString('fr-CA')
+      : '';
+    return '<div class="revenue-item">' +
+      '<div class="item-left">' +
+        '<div class="item-title">' + escapeHtml(item.label) + badge + '</div>' +
+        '<div class="item-meta">' + dateText + '</div>' +
+        '<div class="revenue-actions"><button class="revenue-delete" data-delete-revenue="' + item.id + '">Supprimer</button></div>' +
+      '</div>' +
+      '<div class="item-amount positive">' + money(item.amount) + '</div>' +
+    '</div>';
+  }
+
+  function renderRevenues() {
+    if (!$('revenueMonth')) return;
+    const month = $('revenueMonth').value || currentMonth();
+    const totalsForMonth = revenueTotals(month);
+    $('revenueMeTotal').textContent = money(totalsForMonth.me);
+    $('revenueWifeTotal').textContent = money(totalsForMonth.wife);
+    $('revenueAllTotal').textContent = money(totalsForMonth.all);
+
+    let items = revenuesForMonth(month).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    if (currentPerson !== 'all') items = items.filter((r) => r.owner === currentPerson);
+
+    const labels = { me: 'Moi', wife: 'Ma femme', all: 'Ensemble' };
+    $('revenueListSubtitle').textContent = monthLabel(month) + ' · ' + labels[currentPerson];
+    $('revenueList').innerHTML = items.length
+      ? items.map(revenueRow).join('')
+      : '<div class="empty">Aucun revenu enregistré pour ce mois.</div>';
+  }
+
   function renderBackupStatus() {
     const last = localStorage.getItem(LAST_BACKUP_KEY);
     $('backupStatus').textContent = last
@@ -326,6 +379,7 @@
   function renderAll() {
     renderHome();
     renderAccounts();
+    renderRevenues();
     renderReports();
     renderBackupStatus();
     qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === currentPerson));
@@ -364,10 +418,11 @@
   async function exportBackup() {
     const data = {
       app: 'Mes Soldes',
-      version: 5,
+      version: 6,
       exportedAt: new Date().toISOString(),
       accounts: accounts,
-      reports: reports
+      reports: reports,
+      revenues: revenues
     };
     const json = JSON.stringify(data, null, 2);
     const date = new Date().toISOString().slice(0, 10);
@@ -404,6 +459,9 @@
         owner: a.owner === 'wife' ? 'wife' : 'me'
       }));
       reports = data.reports;
+      revenues = Array.isArray(data.revenues) ? data.revenues.map((r) => Object.assign({}, r, {
+        owner: r.owner === 'wife' ? 'wife' : 'me'
+      })) : [];
       persist();
       showToast('Sauvegarde restaurée');
     } catch (_) {
@@ -437,6 +495,35 @@
     showToast(id ? 'Compte modifié' : 'Compte ajouté');
   });
 
+
+  $('revenueForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const owner = $('revenueOwner').value === 'wife' ? 'wife' : 'me';
+    const date = $('revenueDate').value;
+    const label = $('revenueLabel').value.trim();
+    const amount = Number($('revenueAmount').value || 0);
+
+    if (!date || !label || amount <= 0) {
+      alert('Entre une date, une description et un montant supérieur à 0.');
+      return;
+    }
+
+    revenues.push({
+      id: 'r_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      owner: owner,
+      date: date,
+      label: label,
+      amount: amount,
+      createdAt: new Date().toISOString()
+    });
+
+    $('revenueMonth').value = date.slice(0, 7);
+    $('revenueLabel').value = '';
+    $('revenueAmount').value = '';
+    persist();
+    showToast('Revenu ajouté');
+  });
+
   document.addEventListener('click', (event) => {
     const person = event.target.closest('[data-person]');
     if (person) {
@@ -467,6 +554,16 @@
       const item = accounts.find((a) => a.id === del.dataset.delete);
       if (item && confirm('Supprimer ' + item.name + ' ?')) {
         accounts = accounts.filter((a) => a.id !== item.id);
+        persist();
+      }
+      return;
+    }
+
+    const delRevenue = event.target.closest('[data-delete-revenue]');
+    if (delRevenue) {
+      const item = revenues.find((r) => r.id === delRevenue.dataset.deleteRevenue);
+      if (item && confirm('Supprimer ce revenu de ' + money(item.amount) + ' ?')) {
+        revenues = revenues.filter((r) => r.id !== item.id);
         persist();
       }
       return;
@@ -520,6 +617,10 @@
   });
 
   $('reportMonth').value = currentMonth();
+  $('revenueMonth').value = currentMonth();
+  $('revenueMonth').addEventListener('change', renderRevenues);
+  $('revenueDate').value = new Date().toISOString().slice(0, 10);
+  if (currentPerson !== 'all') $('revenueOwner').value = currentPerson;
 
   if ('serviceWorker' in navigator) {
     let refreshing = false;
