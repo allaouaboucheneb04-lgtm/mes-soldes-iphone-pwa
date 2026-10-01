@@ -108,9 +108,12 @@
   }
 
   function setPerson(person) {
+    if (!['me', 'wife', 'all'].includes(person)) return;
     currentPerson = person;
     localStorage.setItem(PERSON_KEY, person);
     qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === person));
+    const labels = { me: 'Moi', wife: 'Ma femme', all: 'Ensemble' };
+    if ($('profileLabel')) $('profileLabel').textContent = labels[person];
     renderAll();
   }
 
@@ -326,6 +329,8 @@
     renderReports();
     renderBackupStatus();
     qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === currentPerson));
+    const labels = { me: 'Moi', wife: 'Ma femme', all: 'Ensemble' };
+    if ($('profileLabel')) $('profileLabel').textContent = labels[currentPerson];
   }
 
   function syncModalFields() {
@@ -479,6 +484,10 @@
 
     if (event.target.closest('[data-close-modal]')) closeModal();
   });
+
+  $('personMeBtn').addEventListener('click', () => setPerson('me'));
+  $('personWifeBtn').addEventListener('click', () => setPerson('wife'));
+  $('personAllBtn').addEventListener('click', () => setPerson('all'));
 
   $('accountType').addEventListener('change', syncModalFields);
   $('addBankBtn').addEventListener('click', () => openModal('bank'));
