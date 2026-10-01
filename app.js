@@ -2,10 +2,15 @@
   const ACCOUNTS_KEY = 'mes-soldes-v1';
   const REPORTS_KEY = 'mes-soldes-reports-v1';
   const LAST_BACKUP_KEY = 'mes-soldes-last-backup-v1';
+  const PERSON_KEY = 'mes-soldes-person-v1';
 
-  let accounts = load(ACCOUNTS_KEY, []);
+  let accounts = load(ACCOUNTS_KEY, []).map((a) => Object.assign({}, a, {
+    owner: a.owner === 'wife' ? 'wife' : 'me'
+  }));
   let reports = load(REPORTS_KEY, []);
   let currentView = 'home';
+  let currentPerson = localStorage.getItem(PERSON_KEY) || 'me';
+  if (!['me', 'wife', 'all'].includes(currentPerson)) currentPerson = 'me';
 
   const $ = (id) => document.getElementById(id);
   const qsa = (sel) => Array.from(document.querySelectorAll(sel));
@@ -45,6 +50,20 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   }
 
+  function ownerOf(account) {
+    return account && account.owner === 'wife' ? 'wife' : 'me';
+  }
+
+  function ownerLabel(owner) {
+    return owner === 'wife' ? 'Ma femme' : 'Moi';
+  }
+
+  function filterByPerson(list, person) {
+    const selected = person || currentPerson;
+    if (selected === 'all') return list.slice();
+    return list.filter((a) => ownerOf(a) === selected);
+  }
+
   function totals(list) {
     const source = list || accounts;
     const bank = source
@@ -54,6 +73,10 @@
       .filter((a) => a.type === 'credit')
       .reduce((sum, a) => sum + Number(a.balance || 0), 0);
     return { bank: bank, credit: credit, net: bank - credit };
+  }
+
+  function visibleTotals() {
+    return totals(filterByPerson(accounts));
   }
 
   function escapeHtml(value) {
@@ -84,11 +107,21 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function setPerson(person) {
+    currentPerson = person;
+    localStorage.setItem(PERSON_KEY, person);
+    qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === person));
+    renderAll();
+  }
+
   function compactRow(account) {
     const meta = account.type === 'credit' ? 'Carte de crédit' : account.type === 'cash' ? 'Espèces' : 'Compte bancaire';
+    const badge = currentPerson === 'all'
+      ? '<span class="owner-badge">' + ownerLabel(ownerOf(account)) + '</span>'
+      : '';
     return '<div class="compact-item">' +
       '<div class="item-left">' +
-        '<div class="item-title">' + escapeHtml(account.name) + '</div>' +
+        '<div class="item-title">' + escapeHtml(account.name) + badge + '</div>' +
         '<div class="item-meta">' + meta + '</div>' +
       '</div>' +
       '<div class="item-amount ' + (account.type === 'credit' ? 'negative' : 'positive') + '">' + money(account.balance) + '</div>' +
@@ -101,6 +134,9 @@
     const balance = Number(account.balance || 0);
     const available = Math.max(0, limit - balance);
     const pct = limit > 0 ? Math.min(100, (balance / limit) * 100) : 0;
+    const badge = currentPerson === 'all'
+      ? '<span class="owner-badge">' + ownerLabel(ownerOf(account)) + '</span>'
+      : '';
 
     let meta = account.type === 'cash' ? 'Espèces' : 'Compte bancaire';
     let progress = '';
@@ -114,7 +150,7 @@
     return '<article class="account-item">' +
       '<div class="account-main">' +
         '<div class="item-left">' +
-          '<div class="item-title">' + escapeHtml(account.name) + '</div>' +
+          '<div class="item-title">' + escapeHtml(account.name) + badge + '</div>' +
           '<div class="item-meta">' + meta + '</div>' +
           progress +
         '</div>' +
@@ -127,20 +163,32 @@
     '</article>';
   }
 
+  function reportAccounts(report) {
+    return (report.accounts || []).map((a) => Object.assign({}, a, {
+      owner: a.owner === 'wife' ? 'wife' : 'me'
+    }));
+  }
+
+  function reportTotals(report, person) {
+    return totals(filterByPerson(reportAccounts(report), person));
+  }
+
   function latestReportDelta() {
     const sorted = reports.slice().sort((a, b) => a.month.localeCompare(b.month));
     if (sorted.length < 2) return null;
     const last = sorted[sorted.length - 1];
     const prev = sorted[sorted.length - 2];
+    const lastTotals = reportTotals(last, currentPerson);
+    const prevTotals = reportTotals(prev, currentPerson);
     return {
-      delta: Number(last.net || 0) - Number(prev.net || 0),
+      delta: lastTotals.net - prevTotals.net,
       last: last,
       prev: prev
     };
   }
 
   function renderHome() {
-    const t = totals();
+    const t = visibleTotals();
     $('homeNet').textContent = money(t.net);
     $('homeBank').textContent = money(t.bank);
     $('homeCredit').textContent = money(t.credit);
@@ -153,32 +201,35 @@
       $('homeDelta').textContent = monthLabel(d.last.month) + ' : ' + sign + money(d.delta) + ' par rapport au mois précédent';
     }
 
-    const bank = accounts.filter((a) => a.type === 'bank' || a.type === 'cash').slice(0, 3);
-    const credit = accounts.filter((a) => a.type === 'credit').slice(0, 3);
+    const visible = filterByPerson(accounts);
+    const bank = visible.filter((a) => a.type === 'bank' || a.type === 'cash').slice(0, 3);
+    const credit = visible.filter((a) => a.type === 'credit').slice(0, 3);
 
     $('homeAccounts').innerHTML = bank.length ? bank.map(compactRow).join('') : '<div class="empty">Aucun compte enregistré.</div>';
     $('homeCards').innerHTML = credit.length ? credit.map(compactRow).join('') : '<div class="empty">Aucune carte enregistrée.</div>';
   }
 
   function renderAccounts() {
-    const bank = accounts.filter((a) => a.type === 'bank' || a.type === 'cash');
-    const credit = accounts.filter((a) => a.type === 'credit');
+    const visible = filterByPerson(accounts);
+    const bank = visible.filter((a) => a.type === 'bank' || a.type === 'cash');
+    const credit = visible.filter((a) => a.type === 'credit');
     $('bankList').innerHTML = bank.length ? bank.map(accountRow).join('') : '<div class="empty">Aucun compte bancaire ou espèces.</div>';
     $('cardList').innerHTML = credit.length ? credit.map(accountRow).join('') : '<div class="empty">Aucune carte de crédit.</div>';
   }
 
   function snapshotFor(month) {
-    const t = totals();
+    const allTotals = totals(accounts);
     return {
       month: month,
       savedAt: new Date().toISOString(),
-      bank: t.bank,
-      credit: t.credit,
-      net: t.net,
+      bank: allTotals.bank,
+      credit: allTotals.credit,
+      net: allTotals.net,
       accounts: accounts.map((a) => ({
         id: a.id,
         name: a.name,
         type: a.type,
+        owner: ownerOf(a),
         balance: Number(a.balance || 0),
         limit: Number(a.limit || 0)
       }))
@@ -204,18 +255,25 @@
 
   function reportCard(report) {
     const prev = previousReport(report.month);
-    const netDelta = prev ? Number(report.net || 0) - Number(prev.net || 0) : null;
+    const currentAccounts = filterByPerson(reportAccounts(report));
+    const currentTotals = totals(currentAccounts);
+    const prevAccounts = prev ? filterByPerson(reportAccounts(prev)) : [];
+    const prevTotals = prev ? totals(prevAccounts) : null;
+    const netDelta = prevTotals ? currentTotals.net - prevTotals.net : null;
 
-    const rows = (report.accounts || []).map((account) => {
+    const rows = currentAccounts.map((account) => {
       let old = null;
-      if (prev && Array.isArray(prev.accounts)) {
-        old = prev.accounts.find((p) => p.id === account.id) ||
-              prev.accounts.find((p) => p.name === account.name && p.type === account.type);
+      if (prev) {
+        old = prevAccounts.find((p) => p.id === account.id) ||
+              prevAccounts.find((p) => p.name === account.name && p.type === account.type && ownerOf(p) === ownerOf(account));
       }
       const d = lineDelta(account, old);
       const label = account.type === 'credit' ? 'Carte' : account.type === 'cash' ? 'Espèces' : 'Compte';
+      const badge = currentPerson === 'all'
+        ? ' · ' + ownerLabel(ownerOf(account))
+        : '';
       return '<div class="report-line">' +
-        '<span><strong>' + escapeHtml(account.name) + '</strong> · ' + label + '</span>' +
+        '<span><strong>' + escapeHtml(account.name) + '</strong> · ' + label + badge + '</span>' +
         '<span>' + money(account.balance) + '</span>' +
         '<small class="' + d.cls + '">Différence : ' + d.text + '</small>' +
       '</div>';
@@ -237,13 +295,13 @@
         '<button class="report-delete" data-delete-report="' + report.month + '">Supprimer</button>' +
       '</div>' +
       '<div class="report-summary">' +
-        '<div class="mini-stat"><span>Comptes</span><strong>' + money(report.bank) + '</strong></div>' +
-        '<div class="mini-stat"><span>Dettes cartes</span><strong>' + money(report.credit) + '</strong></div>' +
-        '<div class="mini-stat"><span>Solde net</span><strong>' + money(report.net) + '</strong></div>' +
+        '<div class="mini-stat"><span>Comptes</span><strong>' + money(currentTotals.bank) + '</strong></div>' +
+        '<div class="mini-stat"><span>Dettes cartes</span><strong>' + money(currentTotals.credit) + '</strong></div>' +
+        '<div class="mini-stat"><span>Solde net</span><strong>' + money(currentTotals.net) + '</strong></div>' +
       '</div>' +
       deltaHtml +
       '<details><summary>Voir les différences par compte</summary><div class="report-lines">' +
-        (rows || '<div class="empty">Aucun compte dans ce rapport.</div>') +
+        (rows || '<div class="empty">Aucun compte dans ce rapport pour cette personne.</div>') +
       '</div></details>' +
     '</article>';
   }
@@ -267,6 +325,7 @@
     renderAccounts();
     renderReports();
     renderBackupStatus();
+    qsa('.person-btn').forEach((b) => b.classList.toggle('active', b.dataset.person === currentPerson));
   }
 
   function syncModalFields() {
@@ -279,6 +338,7 @@
     const item = id ? accounts.find((a) => a.id === id) : null;
     $('editId').value = item ? item.id : '';
     $('accountName').value = item ? item.name : '';
+    $('accountOwner').value = item ? ownerOf(item) : (currentPerson === 'wife' ? 'wife' : 'me');
     $('accountType').value = item ? item.type : (mode || 'bank');
     $('accountBalance').value = item ? item.balance : '';
     $('accountLimit').value = item ? (item.limit || '') : '';
@@ -299,7 +359,7 @@
   async function exportBackup() {
     const data = {
       app: 'Mes Soldes',
-      version: 4,
+      version: 5,
       exportedAt: new Date().toISOString(),
       accounts: accounts,
       reports: reports
@@ -335,7 +395,9 @@
       if (!Array.isArray(data.accounts) || !Array.isArray(data.reports)) throw new Error('invalid');
       const ok = confirm('Restaurer ' + data.accounts.length + ' compte(s) et ' + data.reports.length + ' rapport(s) ? Les données actuelles seront remplacées.');
       if (!ok) return;
-      accounts = data.accounts;
+      accounts = data.accounts.map((a) => Object.assign({}, a, {
+        owner: a.owner === 'wife' ? 'wife' : 'me'
+      }));
       reports = data.reports;
       persist();
       showToast('Sauvegarde restaurée');
@@ -351,6 +413,7 @@
     const item = {
       id: id || uid(),
       name: $('accountName').value.trim(),
+      owner: $('accountOwner').value === 'wife' ? 'wife' : 'me',
       type: type,
       balance: Number($('accountBalance').value || 0),
       limit: type === 'credit' ? Number($('accountLimit').value || 0) : 0
@@ -370,6 +433,12 @@
   });
 
   document.addEventListener('click', (event) => {
+    const person = event.target.closest('[data-person]');
+    if (person) {
+      setPerson(person.dataset.person);
+      return;
+    }
+
     const nav = event.target.closest('[data-view-target]');
     if (nav) {
       go(nav.dataset.viewTarget);
