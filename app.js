@@ -234,6 +234,13 @@
       bank: allTotals.bank,
       credit: allTotals.credit,
       net: allTotals.net,
+      revenues: revenuesForMonth(month).map((r) => ({
+        id: r.id,
+        owner: r.owner === 'wife' ? 'wife' : 'me',
+        date: r.date,
+        label: r.label,
+        amount: Number(r.amount || 0)
+      })),
       accounts: accounts.map((a) => ({
         id: a.id,
         name: a.name,
@@ -262,6 +269,26 @@
     };
   }
 
+  function reportRevenueItems(report) {
+    if (Array.isArray(report.revenues)) {
+      return report.revenues.map((r) => Object.assign({}, r, {
+        owner: r.owner === 'wife' ? 'wife' : 'me'
+      }));
+    }
+    return revenuesForMonth(report.month).map((r) => Object.assign({}, r));
+  }
+
+  function filteredReportRevenues(report) {
+    const items = reportRevenueItems(report);
+    if (currentPerson === 'all') return items;
+    return items.filter((r) => r.owner === currentPerson);
+  }
+
+  function totalRevenueForReport(report) {
+    return filteredReportRevenues(report)
+      .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  }
+
   function reportCard(report) {
     const prev = previousReport(report.month);
     const currentAccounts = filterByPerson(reportAccounts(report));
@@ -269,6 +296,9 @@
     const prevAccounts = prev ? filterByPerson(reportAccounts(prev)) : [];
     const prevTotals = prev ? totals(prevAccounts) : null;
     const netDelta = prevTotals ? currentTotals.net - prevTotals.net : null;
+    const currentRevenue = totalRevenueForReport(report);
+    const previousRevenue = prev ? totalRevenueForReport(prev) : null;
+    const revenueDelta = previousRevenue !== null ? currentRevenue - previousRevenue : null;
 
     const rows = currentAccounts.map((account) => {
       let old = null;
@@ -295,6 +325,26 @@
         (netDelta > 0 ? '+' : '') + money(netDelta) + '</span></div>';
     }
 
+    let revenueDeltaHtml = '<div class="delta-box">Revenus : premier mois comparé.</div>';
+    if (revenueDelta !== null) {
+      const revenueCls = revenueDelta > 0 ? 'delta-good' : revenueDelta < 0 ? 'delta-bad' : '';
+      revenueDeltaHtml = '<div class="delta-box">Différence des revenus : <span class="' + revenueCls + '">' +
+        (revenueDelta > 0 ? '+' : '') + money(revenueDelta) + '</span></div>';
+    }
+
+    const revenueRows = filteredReportRevenues(report)
+      .slice()
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .map((r) => {
+        const badge = currentPerson === 'all' ? ' · ' + ownerLabel(r.owner) : '';
+        const dateText = r.date ? new Date(r.date + 'T12:00:00').toLocaleDateString('fr-CA') : '';
+        return '<div class="report-line">' +
+          '<span><strong>' + escapeHtml(r.label || 'Revenu') + '</strong>' + badge + '</span>' +
+          '<span>' + money(r.amount) + '</span>' +
+          '<small>' + dateText + '</small>' +
+        '</div>';
+      }).join('');
+
     return '<article class="report-card">' +
       '<div class="report-top">' +
         '<div>' +
@@ -306,11 +356,16 @@
       '<div class="report-summary">' +
         '<div class="mini-stat"><span>Comptes</span><strong>' + money(currentTotals.bank) + '</strong></div>' +
         '<div class="mini-stat"><span>Dettes cartes</span><strong>' + money(currentTotals.credit) + '</strong></div>' +
+        '<div class="mini-stat"><span>Revenus du mois</span><strong>' + money(currentRevenue) + '</strong></div>' +
         '<div class="mini-stat"><span>Solde net</span><strong>' + money(currentTotals.net) + '</strong></div>' +
       '</div>' +
       deltaHtml +
+      revenueDeltaHtml +
       '<details><summary>Voir les différences par compte</summary><div class="report-lines">' +
         (rows || '<div class="empty">Aucun compte dans ce rapport pour cette personne.</div>') +
+      '</div></details>' +
+      '<details><summary>Voir les revenus du mois</summary><div class="report-lines">' +
+        (revenueRows || '<div class="empty">Aucun revenu enregistré pour ce mois.</div>') +
       '</div></details>' +
     '</article>';
   }
@@ -592,12 +647,11 @@
   $('quickAddBtn').addEventListener('click', () => openModal(currentView === 'cards' ? 'credit' : 'bank'));
 
   $('saveReportBtn').addEventListener('click', () => {
-    if (!accounts.length) {
-      alert('Ajoute au moins un compte avant de créer un compte rendu.');
+    const month = $('reportMonth').value || currentMonth();
+    if (!accounts.length && !revenuesForMonth(month).length) {
+      alert('Ajoute au moins un compte ou un revenu avant de créer un compte rendu.');
       return;
     }
-
-    const month = $('reportMonth').value || currentMonth();
     const exists = reports.some((r) => r.month === month);
     if (exists && !confirm('Un compte rendu existe déjà pour ' + monthLabel(month) + '. Le remplacer ?')) return;
 
