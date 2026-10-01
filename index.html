@@ -75,6 +75,60 @@
         </div>
       </section>
 
+      <section class="view" data-view="revenues">
+        <div class="section-card">
+          <div class="section-head">
+            <div><h2>Revenus du mois</h2><p>Suivi séparé pour toi et ta femme</p></div>
+          </div>
+
+          <div class="form-row">
+            <label for="revenueMonth">Mois</label>
+            <input id="revenueMonth" type="month">
+          </div>
+
+          <div class="revenue-summary">
+            <div class="mini-stat"><span>Moi</span><strong id="revenueMeTotal">0,00 $</strong></div>
+            <div class="mini-stat"><span>Ma femme</span><strong id="revenueWifeTotal">0,00 $</strong></div>
+            <div class="mini-stat"><span>Ensemble</span><strong id="revenueAllTotal">0,00 $</strong></div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-head">
+            <div><h2>Ajouter un revenu</h2><p>Salaire, taxi, virement, autre revenu</p></div>
+          </div>
+          <form id="revenueForm">
+            <div class="form-row">
+              <label for="revenueOwner">Propriétaire</label>
+              <select id="revenueOwner">
+                <option value="me">Moi</option>
+                <option value="wife">Ma femme</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="revenueDate">Date</label>
+              <input id="revenueDate" type="date" required>
+            </div>
+            <div class="form-row">
+              <label for="revenueLabel">Description</label>
+              <input id="revenueLabel" type="text" placeholder="Ex. Taxi, salaire, contrat" required>
+            </div>
+            <div class="form-row">
+              <label for="revenueAmount">Montant</label>
+              <input id="revenueAmount" type="number" inputmode="decimal" step="0.01" placeholder="0.00" required>
+            </div>
+            <button class="primary-btn" type="submit">Ajouter le revenu</button>
+          </form>
+        </div>
+
+        <div class="section-card">
+          <div class="section-head">
+            <div><h2>Historique du mois</h2><p id="revenueListSubtitle">Revenus enregistrés</p></div>
+          </div>
+          <div id="revenueList" class="item-list"></div>
+        </div>
+      </section>
+
       <section class="view" data-view="reports">
         <div class="section-card">
           <div class="section-head">
@@ -112,6 +166,7 @@
       <button class="nav-btn active" data-view-target="home"><span>⌂</span><small>Accueil</small></button>
       <button class="nav-btn" data-view-target="accounts"><span>🏦</span><small>Comptes</small></button>
       <button class="nav-btn" data-view-target="cards"><span>💳</span><small>Cartes</small></button>
+      <button class="nav-btn" data-view-target="revenues"><span>💰</span><small>Revenus</small></button>
       <button class="nav-btn" data-view-target="reports"><span>📊</span><small>Rapports</small></button>
       <button class="nav-btn" data-view-target="backup"><span>☁︎</span><small>Sauvegarde</small></button>
     </nav>
