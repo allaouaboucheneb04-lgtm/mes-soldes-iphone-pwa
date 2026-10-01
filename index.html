@@ -22,6 +22,12 @@
       <button class="icon-btn" id="quickAddBtn" aria-label="Ajouter">＋</button>
     </header>
 
+    <div class="person-switch" aria-label="Choisir une personne">
+      <button class="person-btn active" data-person="me">Moi</button>
+      <button class="person-btn" data-person="wife">Ma femme</button>
+      <button class="person-btn" data-person="all">Ensemble</button>
+    </div>
+
     <main class="content">
       <section class="view active" data-view="home">
         <div class="hero-card">
@@ -122,6 +128,13 @@
       <form id="accountForm">
         <input id="editId" type="hidden">
         <div class="form-row"><label for="accountName">Nom</label><input id="accountName" type="text" placeholder="Ex. RBC, TD Visa, Cash" required></div>
+        <div class="form-row">
+          <label for="accountOwner">Propriétaire</label>
+          <select id="accountOwner">
+            <option value="me">Moi</option>
+            <option value="wife">Ma femme</option>
+          </select>
+        </div>
         <div class="form-row">
           <label for="accountType">Type</label>
           <select id="accountType">
