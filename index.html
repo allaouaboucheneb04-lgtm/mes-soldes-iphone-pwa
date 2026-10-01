@@ -197,10 +197,84 @@
       margin-bottom: 16px;
     }
 
+    .report-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+
+    .report-list { display: grid; gap: 12px; }
+
+    .report {
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .report-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .report-title { font-weight: 900; font-size: 17px; }
+    .report-date { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+    .report-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .mini {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 10px;
+    }
+    .mini .k { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+    .mini .v { font-weight: 850; font-size: 14px; }
+
+    .diff-box {
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .report-accounts { display: grid; gap: 7px; }
+    .report-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      padding: 8px 0;
+      border-top: 1px solid #f1f5f9;
+    }
+    .report-row:first-child { border-top: 0; }
+    .report-row .amt { font-weight: 800; white-space: nowrap; }
+    .delta { font-weight: 800; white-space: nowrap; font-size: 12px; }
+    .delta.good { color: var(--positive); }
+    .delta.bad { color: var(--negative); }
+    .delta.neutral { color: var(--muted); }
+
     @media (max-width: 520px) {
       .summary { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .field.full { grid-column: auto; }
+      .report-toolbar { grid-template-columns: 1fr; }
+      .report-summary { grid-template-columns: 1fr; }
+      .report-row { grid-template-columns: 1fr auto; }
+      .report-row .delta { grid-column: 1 / -1; text-align: right; }
     }
   </style>
 </head>
@@ -269,11 +343,26 @@
       <h2>Mes comptes</h2>
       <div class="account-list" id="accountList"></div>
     </section>
+
+    <section class="panel">
+      <h2>Comptes rendus mensuels</h2>
+      <div class="report-toolbar">
+        <div class="field">
+          <label for="reportMonth">Mois du compte rendu</label>
+          <input id="reportMonth" type="month" />
+        </div>
+        <button type="button" class="btn-primary" id="saveReportBtn">Enregistrer le mois</button>
+      </div>
+      <div class="note">Le compte rendu garde une photo de tous tes soldes pour ce mois et compare automatiquement avec le compte rendu précédent.</div>
+      <div class="report-list" id="reportList" style="margin-top:14px;"></div>
+    </section>
   </main>
 
   <script>
     const STORAGE_KEY = 'mes-soldes-v1';
+    const REPORTS_KEY = 'mes-soldes-reports-v1';
     let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let reports = JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
     let editingId = null;
 
     const form = document.getElementById('accountForm');
@@ -286,68 +375,78 @@
     const cancelBtn = document.getElementById('cancelBtn');
     const formTitle = document.getElementById('formTitle');
     const saveBtn = document.getElementById('saveBtn');
+    const reportMonth = document.getElementById('reportMonth');
+    const saveReportBtn = document.getElementById('saveReportBtn');
+    const reportList = document.getElementById('reportList');
 
     function money(value) {
-      return new Intl.NumberFormat('fr-CA', {
-        style: 'currency',
-        currency: 'CAD'
-      }).format(Number(value || 0));
+      return new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(Number(value || 0));
     }
 
-    function save() {
+    function monthLabel(key) {
+      const [y, m] = key.split('-').map(Number);
+      return new Intl.DateTimeFormat('fr-CA', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+    }
+
+    function currentMonthKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function totals(list) {
+      const bank = list.filter(a => a.type === 'bank' || a.type === 'cash').reduce((s, a) => s + Number(a.balance || 0), 0);
+      const credit = list.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0);
+      return { bank, credit, net: bank - credit };
+    }
+
+    function saveAccounts() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
       render();
     }
 
+    function saveReports() {
+      localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+      renderReports();
+    }
+
     function render() {
-      const bankTotal = accounts
-        .filter(a => a.type === 'bank' || a.type === 'cash')
-        .reduce((sum, a) => sum + Number(a.balance), 0);
-
-      const creditTotal = accounts
-        .filter(a => a.type === 'credit')
-        .reduce((sum, a) => sum + Number(a.balance), 0);
-
-      const net = bankTotal - creditTotal;
-
-      document.getElementById('bankTotal').textContent = money(bankTotal);
-      document.getElementById('creditTotal').textContent = money(creditTotal);
+      const t = totals(accounts);
+      document.getElementById('bankTotal').textContent = money(t.bank);
+      document.getElementById('creditTotal').textContent = money(t.credit);
       const netEl = document.getElementById('netTotal');
-      netEl.textContent = money(net);
-      netEl.className = 'value ' + (net >= 0 ? 'positive' : 'negative');
+      netEl.textContent = money(t.net);
+      netEl.className = 'value ' + (t.net >= 0 ? 'positive' : 'negative');
 
       if (!accounts.length) {
         accountList.innerHTML = '<div class="empty">Aucun compte enregistré pour le moment.</div>';
-        return;
+      } else {
+        accountList.innerHTML = accounts.map(a => {
+          const typeLabel = a.type === 'bank' ? 'Compte bancaire' : a.type === 'credit' ? 'Carte de crédit' : 'Espèces';
+          let extra = '';
+          if (a.type === 'credit' && Number(a.limit) > 0) {
+            const available = Math.max(0, Number(a.limit) - Number(a.balance));
+            extra = ` · Disponible : ${money(available)}`;
+          }
+          return `
+            <div class="account">
+              <div class="account-main">
+                <div class="account-name">${escapeHtml(a.name)}</div>
+                <div class="account-meta">${typeLabel}${extra}</div>
+              </div>
+              <div class="account-balance ${a.type === 'credit' ? 'negative' : 'positive'}">${money(a.balance)}</div>
+              <div class="account-buttons">
+                <button class="btn-secondary" onclick="editAccount('${a.id}')">Modifier</button>
+                <button class="btn-danger" onclick="deleteAccount('${a.id}')">Supprimer</button>
+              </div>
+            </div>
+          `;
+        }).join('');
       }
-
-      accountList.innerHTML = accounts.map(a => {
-        const typeLabel = a.type === 'bank' ? 'Compte bancaire' : a.type === 'credit' ? 'Carte de crédit' : 'Espèces';
-        let extra = '';
-        if (a.type === 'credit' && Number(a.limit) > 0) {
-          const available = Math.max(0, Number(a.limit) - Number(a.balance));
-          extra = ` · Disponible : ${money(available)}`;
-        }
-        return `
-          <div class="account">
-            <div class="account-main">
-              <div class="account-name">${escapeHtml(a.name)}</div>
-              <div class="account-meta">${typeLabel}${extra}</div>
-            </div>
-            <div class="account-balance ${a.type === 'credit' ? 'negative' : 'positive'}">${money(a.balance)}</div>
-            <div class="account-buttons">
-              <button class="btn-secondary" onclick="editAccount('${a.id}')">Modifier</button>
-              <button class="btn-danger" onclick="deleteAccount('${a.id}')">Supprimer</button>
-            </div>
-          </div>
-        `;
-      }).join('');
+      renderReports();
     }
 
     function escapeHtml(str) {
-      return String(str).replace(/[&<>'"]/g, c => ({
-        '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
-      })[c]);
+      return String(str).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[c]);
     }
 
     function resetForm() {
@@ -358,6 +457,67 @@
       cancelBtn.style.display = 'none';
       formTitle.textContent = 'Ajouter un compte';
       saveBtn.textContent = 'Enregistrer';
+    }
+
+    function findPreviousReport(indexInSorted) {
+      const sorted = [...reports].sort((a, b) => b.month.localeCompare(a.month));
+      return sorted[indexInSorted + 1] || null;
+    }
+
+    function deltaClass(type, delta) {
+      if (Math.abs(delta) < 0.005) return 'neutral';
+      if (type === 'credit') return delta < 0 ? 'good' : 'bad';
+      return delta > 0 ? 'good' : 'bad';
+    }
+
+    function deltaText(delta) {
+      if (Math.abs(delta) < 0.005) return 'Aucun changement';
+      return `${delta > 0 ? '+' : ''}${money(delta)}`;
+    }
+
+    function renderReports() {
+      const sorted = [...reports].sort((a, b) => b.month.localeCompare(a.month));
+      if (!sorted.length) {
+        reportList.innerHTML = '<div class="empty">Aucun compte rendu mensuel enregistré.</div>';
+        return;
+      }
+
+      reportList.innerHTML = sorted.map((r, idx) => {
+        const prev = sorted[idx + 1] || null;
+        const netDelta = prev ? Number(r.totals.net) - Number(prev.totals.net) : null;
+        const prevById = new Map((prev?.accounts || []).map(a => [a.id, a]));
+        const rows = r.accounts.map(a => {
+          const old = prevById.get(a.id);
+          const delta = old ? Number(a.balance) - Number(old.balance) : null;
+          return `
+            <div class="report-row">
+              <div>${escapeHtml(a.name)} <span class="account-meta">${a.type === 'credit' ? 'Carte' : a.type === 'cash' ? 'Espèces' : 'Compte'}</span></div>
+              <div class="amt">${money(a.balance)}</div>
+              <div class="delta ${delta === null ? 'neutral' : deltaClass(a.type, delta)}">${delta === null ? 'Nouveau / pas de comparaison' : deltaText(delta)}</div>
+            </div>`;
+        }).join('');
+
+        return `
+          <div class="report">
+            <div class="report-head">
+              <div>
+                <div class="report-title">${monthLabel(r.month)}</div>
+                <div class="report-date">Enregistré le ${new Date(r.savedAt).toLocaleDateString('fr-CA')}</div>
+              </div>
+              <button class="btn-danger" onclick="deleteReport('${r.month}')">Supprimer</button>
+            </div>
+            <div class="report-summary">
+              <div class="mini"><div class="k">Comptes + espèces</div><div class="v positive">${money(r.totals.bank)}</div></div>
+              <div class="mini"><div class="k">Dettes cartes</div><div class="v negative">${money(r.totals.credit)}</div></div>
+              <div class="mini"><div class="k">Solde net</div><div class="v ${r.totals.net >= 0 ? 'positive' : 'negative'}">${money(r.totals.net)}</div></div>
+            </div>
+            <div class="diff-box">
+              ${prev ? `Différence du solde net par rapport à ${monthLabel(prev.month)} : <strong class="${netDelta >= 0 ? 'positive' : 'negative'}">${netDelta > 0 ? '+' : ''}${money(netDelta)}</strong>` : 'Premier compte rendu : aucune comparaison précédente.'}
+            </div>
+            <div class="report-accounts">${rows}</div>
+          </div>
+        `;
+      }).join('');
     }
 
     typeInput.addEventListener('change', () => {
@@ -373,14 +533,8 @@
         balance: Number(balanceInput.value || 0),
         limit: typeInput.value === 'credit' ? Number(limitInput.value || 0) : 0
       };
-
-      if (editingId) {
-        accounts = accounts.map(a => a.id === editingId ? item : a);
-      } else {
-        accounts.unshift(item);
-      }
-
-      save();
+      accounts = editingId ? accounts.map(a => a.id === editingId ? item : a) : [item, ...accounts];
+      saveAccounts();
       resetForm();
     });
 
@@ -402,11 +556,32 @@
     window.deleteAccount = function(id) {
       if (!confirm('Supprimer ce compte ?')) return;
       accounts = accounts.filter(a => a.id !== id);
-      save();
+      saveAccounts();
       if (editingId === id) resetForm();
     };
 
+    saveReportBtn.addEventListener('click', () => {
+      if (!accounts.length) {
+        alert('Ajoute au moins un compte avant de créer un compte rendu.');
+        return;
+      }
+      const month = reportMonth.value || currentMonthKey();
+      const snapshot = accounts.map(a => ({ ...a }));
+      const report = { month, savedAt: new Date().toISOString(), accounts: snapshot, totals: totals(snapshot) };
+      const existing = reports.find(r => r.month === month);
+      if (existing && !confirm(`Un compte rendu existe déjà pour ${monthLabel(month)}. Le remplacer ?`)) return;
+      reports = [report, ...reports.filter(r => r.month !== month)];
+      saveReports();
+    });
+
+    window.deleteReport = function(month) {
+      if (!confirm(`Supprimer le compte rendu de ${monthLabel(month)} ?`)) return;
+      reports = reports.filter(r => r.month !== month);
+      saveReports();
+    };
+
     cancelBtn.addEventListener('click', resetForm);
+    reportMonth.value = currentMonthKey();
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
