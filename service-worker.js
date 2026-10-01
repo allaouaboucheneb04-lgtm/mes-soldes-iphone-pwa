@@ -1,4 +1,4 @@
-const CACHE = 'mes-soldes-v9';
+const CACHE = 'mes-soldes-v10';
 const ASSETS = [
   './index.html',
   './styles.css',
