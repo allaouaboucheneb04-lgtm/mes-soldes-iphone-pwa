@@ -1,22 +1,418 @@
-Mes Soldes
-Comptes bancaires et cartes de crédit
-Sur iPhone : ouvre cette page dans Safari, touche Partager, puis Sur l’écran d’accueil. Tes données restent enregistrées dans Safari sur cet iPhone.
-Comptes bancaires
-0,00 $
-Dettes cartes
-0,00 $
-Solde net
-0,00 $
-Ajouter un compte
-Nom
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mes Soldes" />
+  <title>Mes Soldes</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #0f172a;
+      --positive: #15803d;
+      --negative: #b91c1c;
+      --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+    }
 
-Type
-              Compte bancaire
-              Carte de crédit
-              Espèces
-            
-Solde / dette
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: calc(28px + env(safe-area-inset-bottom));
+    }
 
-Enregistrer
-Pour une carte de crédit, entre le montant que tu dois comme nombre positif. Exemple : dette de 2 500 $ → entre 2500.
-Mes comptes
+    .app {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: calc(18px + env(safe-area-inset-top)) 16px 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin: 0;
+      letter-spacing: -0.6px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .summary-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .summary-card .value {
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    .positive { color: var(--positive); }
+    .negative { color: var(--negative); }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .panel h2 {
+      font-size: 18px;
+      margin: 0 0 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px 12px;
+      font-size: 16px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus, select:focus { border-color: #94a3b8; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 15px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: var(--primary); color: #fff; flex: 1; }
+    .btn-secondary { background: #e2e8f0; color: var(--text); }
+    .btn-danger { background: #fee2e2; color: var(--negative); }
+
+    .account-list { display: grid; gap: 10px; }
+
+    .account {
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+    }
+
+    .account-main { min-width: 0; }
+    .account-name { font-weight: 800; font-size: 16px; }
+    .account-meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .account-balance { font-weight: 900; font-size: 18px; text-align: right; white-space: nowrap; }
+    .account-buttons { grid-column: 1 / -1; display: flex; gap: 8px; }
+    .account-buttons button { flex: 1; padding: 10px 12px; font-size: 14px; }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 22px 8px;
+    }
+
+    .note {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .install-tip {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 16px;
+      padding: 12px 14px;
+      color: #3730a3;
+      font-size: 13px;
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 520px) {
+      .summary { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div>
+        <h1>Mes Soldes</h1>
+        <div class="subtitle">Comptes bancaires et cartes de crédit</div>
+      </div>
+    </div>
+
+    <div class="install-tip">
+      Sur iPhone : ouvre cette page dans Safari, touche <strong>Partager</strong>, puis <strong>Sur l’écran d’accueil</strong>. Tes données restent enregistrées dans Safari sur cet iPhone.
+    </div>
+
+    <section class="summary">
+      <div class="summary-card">
+        <div class="label">Comptes bancaires</div>
+        <div class="value positive" id="bankTotal">0,00 $</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Dettes cartes</div>
+        <div class="value negative" id="creditTotal">0,00 $</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Solde net</div>
+        <div class="value" id="netTotal">0,00 $</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="formTitle">Ajouter un compte</h2>
+      <form id="accountForm">
+        <div class="grid">
+          <div class="field full">
+            <label for="name">Nom</label>
+            <input id="name" type="text" placeholder="Ex. RBC, TD Visa, Cash" required />
+          </div>
+          <div class="field">
+            <label for="type">Type</label>
+            <select id="type">
+              <option value="bank">Compte bancaire</option>
+              <option value="credit">Carte de crédit</option>
+              <option value="cash">Espèces</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="balance">Solde / dette</label>
+            <input id="balance" type="number" step="0.01" inputmode="decimal" placeholder="0.00" required />
+          </div>
+          <div class="field" id="limitField" style="display:none;">
+            <label for="limit">Limite de crédit</label>
+            <input id="limit" type="number" step="0.01" inputmode="decimal" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary" id="saveBtn">Enregistrer</button>
+          <button type="button" class="btn-secondary" id="cancelBtn" style="display:none;">Annuler</button>
+        </div>
+      </form>
+      <div class="note">Pour une carte de crédit, entre le montant que tu dois comme nombre positif. Exemple : dette de 2 500 $ → entre 2500.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Mes comptes</h2>
+      <div class="account-list" id="accountList"></div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'mes-soldes-v1';
+    let accounts = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let editingId = null;
+
+    const form = document.getElementById('accountForm');
+    const nameInput = document.getElementById('name');
+    const typeInput = document.getElementById('type');
+    const balanceInput = document.getElementById('balance');
+    const limitInput = document.getElementById('limit');
+    const limitField = document.getElementById('limitField');
+    const accountList = document.getElementById('accountList');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const formTitle = document.getElementById('formTitle');
+    const saveBtn = document.getElementById('saveBtn');
+
+    function money(value) {
+      return new Intl.NumberFormat('fr-CA', {
+        style: 'currency',
+        currency: 'CAD'
+      }).format(Number(value || 0));
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      render();
+    }
+
+    function render() {
+      const bankTotal = accounts
+        .filter(a => a.type === 'bank' || a.type === 'cash')
+        .reduce((sum, a) => sum + Number(a.balance), 0);
+
+      const creditTotal = accounts
+        .filter(a => a.type === 'credit')
+        .reduce((sum, a) => sum + Number(a.balance), 0);
+
+      const net = bankTotal - creditTotal;
+
+      document.getElementById('bankTotal').textContent = money(bankTotal);
+      document.getElementById('creditTotal').textContent = money(creditTotal);
+      const netEl = document.getElementById('netTotal');
+      netEl.textContent = money(net);
+      netEl.className = 'value ' + (net >= 0 ? 'positive' : 'negative');
+
+      if (!accounts.length) {
+        accountList.innerHTML = '<div class="empty">Aucun compte enregistré pour le moment.</div>';
+        return;
+      }
+
+      accountList.innerHTML = accounts.map(a => {
+        const typeLabel = a.type === 'bank' ? 'Compte bancaire' : a.type === 'credit' ? 'Carte de crédit' : 'Espèces';
+        let extra = '';
+        if (a.type === 'credit' && Number(a.limit) > 0) {
+          const available = Math.max(0, Number(a.limit) - Number(a.balance));
+          extra = ` · Disponible : ${money(available)}`;
+        }
+        return `
+          <div class="account">
+            <div class="account-main">
+              <div class="account-name">${escapeHtml(a.name)}</div>
+              <div class="account-meta">${typeLabel}${extra}</div>
+            </div>
+            <div class="account-balance ${a.type === 'credit' ? 'negative' : 'positive'}">${money(a.balance)}</div>
+            <div class="account-buttons">
+              <button class="btn-secondary" onclick="editAccount('${a.id}')">Modifier</button>
+              <button class="btn-danger" onclick="deleteAccount('${a.id}')">Supprimer</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>'"]/g, c => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
+      })[c]);
+    }
+
+    function resetForm() {
+      editingId = null;
+      form.reset();
+      typeInput.value = 'bank';
+      limitField.style.display = 'none';
+      cancelBtn.style.display = 'none';
+      formTitle.textContent = 'Ajouter un compte';
+      saveBtn.textContent = 'Enregistrer';
+    }
+
+    typeInput.addEventListener('change', () => {
+      limitField.style.display = typeInput.value === 'credit' ? 'flex' : 'none';
+    });
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const item = {
+        id: editingId || String(Date.now()),
+        name: nameInput.value.trim(),
+        type: typeInput.value,
+        balance: Number(balanceInput.value || 0),
+        limit: typeInput.value === 'credit' ? Number(limitInput.value || 0) : 0
+      };
+
+      if (editingId) {
+        accounts = accounts.map(a => a.id === editingId ? item : a);
+      } else {
+        accounts.unshift(item);
+      }
+
+      save();
+      resetForm();
+    });
+
+    window.editAccount = function(id) {
+      const a = accounts.find(x => x.id === id);
+      if (!a) return;
+      editingId = id;
+      nameInput.value = a.name;
+      typeInput.value = a.type;
+      balanceInput.value = a.balance;
+      limitInput.value = a.limit || '';
+      limitField.style.display = a.type === 'credit' ? 'flex' : 'none';
+      cancelBtn.style.display = 'block';
+      formTitle.textContent = 'Modifier le compte';
+      saveBtn.textContent = 'Mettre à jour';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteAccount = function(id) {
+      if (!confirm('Supprimer ce compte ?')) return;
+      accounts = accounts.filter(a => a.id !== id);
+      save();
+      if (editingId === id) resetForm();
+    };
+
+    cancelBtn.addEventListener('click', resetForm);
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+    }
+
+    render();
+  </script>
+</body>
+</html>
